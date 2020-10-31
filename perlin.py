@@ -1,6 +1,4 @@
-
-
-# Copyright (c) 2008, Casey Duncan (casey dot duncan at gmail dot com)
+				# Copyright (c) 2008, Casey Duncan (casey dot duncan at gmail dot com)
 # see LICENSE.txt for details
 
 """Perlin noise -- pure python implementation"""
@@ -193,3 +191,151 @@ class SimplexNoise(BaseNoise):
 			noise += tt**4 * (g[0] * x2 + g[1] * y2)
 
 		return noise * 70.0 # scale noise to [-1, 1]
+
+	def noise3(self, x, y, z):
+		"""3D Perlin simplex noise. 
+		
+		Return a floating point value from -1 to 1 for the given x, y, z coordinate. 
+		The same value is always returned for a given x, y, z pair unless the
+		permutation table changes (see randomize above).
+		"""
+		# Skew the input space to determine which simplex cell we're in
+		s = (x + y + z) * _F3
+		i = floor(x + s)
+		j = floor(y + s)
+		k = floor(z + s)
+		t = (i + j + k) * _G3
+		x0 = x - (i - t) # "Unskewed" distances from cell origin
+		y0 = y - (j - t)
+		z0 = z - (k - t)
+
+		# For the 3D case, the simplex shape is a slightly irregular tetrahedron. 
+		# Determine which simplex we are in. 
+		if x0 >= y0:
+			if y0 >= z0:
+				i1 = 1; j1 = 0; k1 = 0
+				i2 = 1; j2 = 1; k2 = 0
+			elif x0 >= z0:
+				i1 = 1; j1 = 0; k1 = 0
+				i2 = 1; j2 = 0; k2 = 1
+			else:
+				i1 = 0; j1 = 0; k1 = 1
+				i2 = 1; j2 = 0; k2 = 1
+		else: # x0 < y0
+			if y0 < z0:
+				i1 = 0; j1 = 0; k1 = 1
+				i2 = 0; j2 = 1; k2 = 1
+			elif x0 < z0:
+				i1 = 0; j1 = 1; k1 = 0
+				i2 = 0; j2 = 1; k2 = 1
+			else:
+				i1 = 0; j1 = 1; k1 = 0
+				i2 = 1; j2 = 1; k2 = 0
+		
+		# Offsets for remaining corners
+		x1 = x0 - i1 + _G3
+		y1 = y0 - j1 + _G3
+		z1 = z0 - k1 + _G3
+		x2 = x0 - i2 + 2.0 * _G3
+		y2 = y0 - j2 + 2.0 * _G3
+		z2 = z0 - k2 + 2.0 * _G3
+		x3 = x0 - 1.0 + 3.0 * _G3
+		y3 = y0 - 1.0 + 3.0 * _G3
+		z3 = z0 - 1.0 + 3.0 * _G3
+
+		# Calculate the hashed gradient indices of the four simplex corners
+		perm = self.permutation
+		ii = int(i) % self.period
+		jj = int(j) % self.period
+		kk = int(k) % self.period
+		gi0 = perm[ii + perm[jj + perm[kk]]] % 12
+		gi1 = perm[ii + i1 + perm[jj + j1 + perm[kk + k1]]] % 12
+		gi2 = perm[ii + i2 + perm[jj + j2 + perm[kk + k2]]] % 12
+		gi3 = perm[ii + 1 + perm[jj + 1 + perm[kk + 1]]] % 12
+
+		# Calculate the contribution from the four corners
+		noise = 0.0
+		tt = 0.6 - x0**2 - y0**2 - z0**2
+		if tt > 0:
+			g = _GRAD3[gi0]
+			noise = tt**4 * (g[0] * x0 + g[1] * y0 + g[2] * z0)
+		else:
+			noise = 0.0
+		
+		tt = 0.6 - x1**2 - y1**2 - z1**2
+		if tt > 0:
+			g = _GRAD3[gi1]
+			noise += tt**4 * (g[0] * x1 + g[1] * y1 + g[2] * z1)
+		
+		tt = 0.6 - x2**2 - y2**2 - z2**2
+		if tt > 0:
+			g = _GRAD3[gi2]
+			noise += tt**4 * (g[0] * x2 + g[1] * y2 + g[2] * z2)
+		
+		tt = 0.6 - x3**2 - y3**2 - z3**2
+		if tt > 0:
+			g = _GRAD3[gi3]
+			noise += tt**4 * (g[0] * x3 + g[1] * y3 + g[2] * z3)
+		
+		return noise * 32.0
+
+
+def lerp(t, a, b):
+	return a + t * (b - a)
+
+def grad3(hash, x, y, z):
+	g = _GRAD3[hash % 16]
+	return x*g[0] + y*g[1] + z*g[2]
+
+
+class TileableNoise(BaseNoise):
+	"""Tileable implemention of Perlin "improved" noise. This
+	is based on the reference implementation published here:
+	
+	http://mrl.nyu.edu/~perlin/noise/
+	"""
+
+	def noise3(self, x, y, z, repeat, base=0.0):
+		"""Tileable 3D noise.
+		
+		repeat specifies the integer interval in each dimension 
+		when the noise pattern repeats.
+		
+		base allows a different texture to be generated for
+		the same repeat interval.
+		"""
+		i = int(fmod(floor(x), repeat))
+		j = int(fmod(floor(y), repeat))
+		k = int(fmod(floor(z), repeat))
+		ii = (i + 1) % repeat
+		jj = (j + 1) % repeat
+		kk = (k + 1) % repeat
+		if base:
+			i += base; j += base; k += base
+			ii += base; jj += base; kk += base
+
+		x -= floor(x); y -= floor(y); z -= floor(z)
+		fx = x**3 * (x * (x * 6 - 15) + 10)
+		fy = y**3 * (y * (y * 6 - 15) + 10)
+		fz = z**3 * (z * (z * 6 - 15) + 10)
+
+		perm = self.permutation
+		A = perm[i]
+		AA = perm[A + j]
+		AB = perm[A + jj]
+		B = perm[ii]
+		BA = perm[B + j]
+		BB = perm[B + jj]
+		
+		return lerp(fz, lerp(fy, lerp(fx, grad3(perm[AA + k], x, y, z),
+										  grad3(perm[BA + k], x - 1, y, z)),
+								 lerp(fx, grad3(perm[AB + k], x, y - 1, z),
+										  grad3(perm[BB + k], x - 1, y - 1, z))),
+						lerp(fy, lerp(fx, grad3(perm[AA + kk], x, y, z - 1),
+										  grad3(perm[BA + kk], x - 1, y, z - 1)),
+								 lerp(fx, grad3(perm[AB + kk], x, y - 1, z - 1),
+										  grad3(perm[BB + kk], x - 1, y - 1, z - 1))))
+
+
+
+
