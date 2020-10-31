@@ -1,5 +1,4 @@
-				# Copyright (c) 2008, Casey Duncan (casey dot duncan at gmail dot com)
-# see LICENSE.txt for details
+# pip install noise ;)
 
 """Perlin noise -- pure python implementation"""
 
