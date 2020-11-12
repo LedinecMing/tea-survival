@@ -1,9 +1,12 @@
 import pygame as p
-import pygame.locals as locals
-import random,time,datetime
+import random,datetime
 import pygame.gfxdraw
 import sys
 from random import *
+from pygame.locals import *
+import pythonforandroid as p4a
+import time
+from math import atan2, degrees, cos, sin, radians
 from math import *
 sys.setrecursionlimit(5000)
 root=p.display.set_mode((2000,700))
@@ -16,8 +19,8 @@ images={
 'stone-pick':p.image.load('Images/tool_0001.png'),
 'grass':p.transform.scale(p.image.load('Images/grass.png'),(128,128)),
 'black-screen':p.image.load('Images/black.png'),
-'white0.png':p.image.load('Images/white0.png'),
-'white1.png':p.image.load('Images/white1.png'),
+'white0':p.image.load('Images/white0.png'),
+'white1':p.image.load('Images/white1.png'),
 'tree':p.image.load('Images/tree1.png'),
 'water':p.image.load('Images/water.png'),
 'settings':p.image.load('Images/settings.png'),
@@ -28,6 +31,70 @@ images={
 'arrowdown':p.transform.scale(p.image.load('Images/godown.png'),(128,128))}
 locate='main'
 __version__='0.0.2'
+
+class Joystick:
+	def __init__(self, x, y, r, color, stick_color):
+		self.is_move = False
+		self.color = color
+		self.stick_color = stick_color
+		self.x = x
+		self.y = y
+		self.r = r
+		self.stick_r = r // 3
+		self.stick_x = x
+		self.stick_y = y
+	
+	def _move_stick(self, x, y):
+		distance = abs(self.x - x) + abs(self.y - y)
+		if(distance > self.r):
+			distance = self.r
+		
+		self.stick_x = int(self.x + distance * cos(radians(self.angle)))
+		self.stick_y = int(self.y + distance * sin(radians(self.angle)))
+	
+	
+	def _find_angle(self, x, y):
+		delta = [1,0]
+		
+		vector=[self.x-x, self.y-y]
+		#print('mouse pos',(x,y),'angle',degrees(atan2(delta[0] * vector[1] + delta[1] * vector[0], delta[0] * vector[0] - delta[1] * vector[1])),'vectors',vector)
+		self.angle = degrees(atan2(delta[0] * vector[1] + delta[1] * vector[0], delta[0] * vector[0] - delta[1] * vector[1]))
+		self.angle -= 180
+	
+	def draw(self, surface):
+		pygame.draw.circle(surface, self.color, (self.x, self.y), self.r)
+		pygame.draw.circle(surface, self.stick_color, (self.stick_x, self.stick_y), self.stick_r)
+	
+	
+	def on_touch(self, event):
+		if(event.type == MOUSEBUTTONDOWN):
+			x, y = list(map(int, pygame.mouse.get_pos()))
+			if(abs(self.stick_x - x) + abs(self.stick_y - y) <= self.stick_r):
+				self.is_move = True
+			else:
+				self.is_move = False
+			return x,y
+		elif(event.type == MOUSEMOTION):
+			if(self.is_move):
+				x, y = list(map(int, pygame.mouse.get_pos()))
+				
+				self._find_angle(x, y)
+				self._move_stick(x, y)
+				
+				return x,y
+		elif(event.type == MOUSEBUTTONUP):
+			self.is_move = False
+			self.stick_x = self.x
+			self.stick_y = self.y
+			return 0,0
+		return 0,0
+			
+	
+	
+	@property
+	def distance(self):
+		return abs(self.x - self.stick_x) + abs(self.y - self.stick_y)
+j=Joystick(100,root.get_height()-100,100,(25,255,255),(255,255,255))
 class Button():
 	def __init__(self,fromc,toc,loc,code):
 		self.rect=[fromc,toc]
@@ -51,7 +118,8 @@ class Player():
 		self.x,self.y=x,y
 		self.spawn=[256,256]
 		self.name=name
-		self.anim=images["white0.png"]
+		self.counter=0
+		self.anim=images["white0"]
 	def regen(self,count):
 		if not count+self.hp>self.maxhp:
 			return exec('self.hp+=count')
@@ -63,7 +131,7 @@ class Tile():
 		self.tool=tool
 		self.name=name
 tiles={
-'tree':Tile(30,'axe',{'x':0,'y':-256},'tree'),
+'tree':Tile(30,'axe',{'x':0,'y':-128},'tree'),
 'grass':Tile(10,'shovel',{'x':0,'y':0},'grass'),
 'water':Tile(-1,'bucket',{'x':0,'y':0},"water")}
 class World():
@@ -79,18 +147,28 @@ class World():
 		self.builds=[]
 		self.players=players
 		self.gen_plants()
-	
+def player(string):
+	return globals()['pl'].world.players[string]
 worlds=[]
 
 class Source():
 	locate='main'
 	world=0
-	name='alpha'
+	name='Ledinec'
+class shrift():
+	def __init__(self,size):
+		self.font=p.font.SysFont("dejavusans",size)
+	def size(self,text):
+		return self.font.size(text)
+	def render(self,text,color):
+		return self.font.render(text,1,color)
 pl=Source()
-anim=images['white0.png']
+anim=images['white0']
 plus=[10,0]
 count=0
 inp=[0,'']
+
+
 # Хранение дизайна :3
 def main():
 	global count,plus,inp,game,world
@@ -98,12 +176,12 @@ def main():
 		global locs
 		seed=locs['main-create-world'][-1][3]
 	game=0
-	locs={'main':[[i*128,j*128,images['grass']] for i in range(0,root.get_width()//128+1) for j in range(0,root.get_height()//128+1)]+[[root.get_width()//2-(p.font.SysFont("DejaVuSans", 100).size('Tea Survival')[0])//2,root.get_height()//5,p.font.SysFont("DejaVuSans", 100).render('Tea Survival',1,(20,255,255))],[root.get_width()//2+(p.font.SysFont("DejaVuSans", 100).size('Tea Survival')[0])//2,root.get_height()//5,p.transform.scale(images['stone-axe'],(128,128))],[root.get_width()//2-(p.font.SysFont("DejaVuSans", 100).size('Tea Survival')[0])//2-128,root.get_height()//5,p.transform.scale(p.transform.flip(images['stone-pick'],1,0),(128,128))],[root.get_width()//2-p.font.SysFont('dejavusans',75).size('Сервера')[0]//2,root.get_height()//5+100,p.font.SysFont('dejavusans',75).render('Сервера',1,(25,255,255))],[root.get_width()//2-p.font.SysFont('dejavusans',75).size('Локал')[0]//2,root.get_height()//5+200,p.font.SysFont('dejavusans',75).render('Локал',1,(25,255,255))],[0,root.get_height()-70,p.font.SysFont("DejaVuSans", 70).render('Выход',1,(20,255,255))],[500,100,images['white0.png']]],
-	'main-exit':[[i*128,j*128,images['grass']] for i in range(0,root.get_width()//128+1) for j in range(0,root.get_height()//128+1)]+[[root.get_width()//2-(p.font.SysFont("DejaVuSans", 100).size('Tea Survival')[0])//2,root.get_height()//5,p.font.SysFont("DejaVuSans", 100).render('Tea Survival',1,(20,255,255))],[root.get_width()//2+(p.font.SysFont("DejaVuSans", 100).size('Tea Survival')[0])//2,root.get_height()//5,p.transform.scale(images['stone-axe'],(128,128))],[root.get_width()//2-(p.font.SysFont("DejaVuSans", 100).size('Tea Survival')[0])//2-128,root.get_height()//5,p.transform.scale(p.transform.flip(images['stone-pick'],1,0),(128,128))],[root.get_width()//2-p.font.SysFont('dejavusans',75).size('Сервера')[0]//2,root.get_height()//5+100,p.font.SysFont('dejavusans',75).render('Сервера',1,(25,255,255))],[root.get_width()//2-p.font.SysFont('dejavusans',75).size('Локал')[0]//2,root.get_height()//5+200,p.font.SysFont('dejavusans',75).render('Локал',1,(25,255,255))],[0,root.get_height()-70,p.font.SysFont("DejaVuSans", 70).render('Выход',1,(20,255,255))],	[root.get_width()//2-250,0,p.transform.scale(images['black-screen'],(500,root.get_height()))],[root.get_width()//2-200,100,p.font.SysFont('DejaVuSans',50).render('Вы точно хотите выйти?',1,(20,255,255))],[root.get_width()//2-200,root.get_height()//2,p.font.SysFont('DejavuSans',50).render('Да',1,(255,0,0))],[root.get_width()//2+50,root.get_height()//2,p.font.SysFont('DejavuSans',50).render('Нет',1,(0,255,0))]],
-	'main-player':[[i*128,j*128,images['grass']] for i in range(0,root.get_width()//128+1) for j in range(0,root.get_height()//128+1)]+[[root.get_width()//2-(p.font.SysFont("DejaVuSans", 100).size('Tea Survival')[0])//2,root.get_height()//5,p.font.SysFont("DejaVuSans", 100).render('Tea Survival',1,(20,255,255))],[root.get_width()//2+(p.font.SysFont("DejaVuSans", 100).size('Tea Survival')[0])//2,root.get_height()//5,p.transform.scale(images['stone-axe'],(128,128))],[root.get_width()//2-(p.font.SysFont("DejaVuSans", 100).size('Tea Survival')[0])//2-128,root.get_height()//5,p.transform.scale(p.transform.flip(images['stone-pick'],1,0),(128,128))],[root.get_width()//2-p.font.SysFont('dejavusans',75).size('Сервера')[0]//2,root.get_height()//5+100,p.font.SysFont('dejavusans',75).render('Сервера',1,(25,255,255))],[root.get_width()//2-p.font.SysFont('dejavusans',75).size('Локал')[0]//2,root.get_height()//5+200,p.font.SysFont('dejavusans',75).render('Локал',1,(25,255,255))],[0,root.get_height()-70,p.font.SysFont("DejaVuSans", 70).render('Выход',1,(20,255,255))],[root.get_width()//2-250,0,p.transform.scale(images["black-screen"],(500,root.get_height()))],[root.get_width()//2-p.font.SysFont('dejavusans',50).size('Чайные миры')[0]//2,50,p.font.SysFont('dejavusans',50).render('Чайные миры',1,(25,255,255))],[root.get_width()//2-250,75,p.font.SysFont('dejavusans',25).render('Закрыть',1,(0,255,0))],[root.get_width()//2-p.font.SysFont('dejavusans',50).size('Создать новый мир')[0]//2,root.get_height()-100,p.font.SysFont('dejavusans',50).render('Создать новый мир',1,(25,255,255))]]+[[root.get_width()//2-256,(i+1)*128,p.font.SysFont('dejavusans',128).render(worlds[i].name,1,(25,255,255))] for i in range(len(worlds))],
-	"main-create-world":[[i*128,j*128,images['grass']] for i in range(0,root.get_width()//128+1) for j in range(0,root.get_height()//128+1)]+[[root.get_width()//2-(p.font.SysFont("DejaVuSans", 100).size('Tea Survival')[0])//2,root.get_height()//5,p.font.SysFont("DejaVuSans", 100).render('Tea Survival',1,(20,255,255))],[root.get_width()//2+(p.font.SysFont("DejaVuSans", 100).size('Tea Survival')[0])//2,root.get_height()//5,p.transform.scale(images['stone-axe'],(128,128))],[root.get_width()//2-(p.font.SysFont("DejaVuSans", 100).size('Tea Survival')[0])//2-128,root.get_height()//5,p.transform.scale(p.transform.flip(images['stone-pick'],1,0),(128,128))],[root.get_width()//2-p.font.SysFont('dejavusans',75).size('Сервера')[0]//2,root.get_height()//5+100,p.font.SysFont('dejavusans',75).render('Сервера',1,(25,255,255))],[root.get_width()//2-p.font.SysFont('dejavusans',75).size('Локал')[0]//2,root.get_height()//5+200,p.font.SysFont('dejavusans',75).render('Локал',1,(25,255,255))],[0,root.get_height()-70,p.font.SysFont("DejaVuSans", 70).render('Выход',1,(20,255,255))],[root.get_width()//2-256,0,p.transform.scale(images["black-screen"],(512,root.get_height()))],[root.get_width()//2-256,100,p.font.SysFont('dejavusans',50).render('Название:',1,(25,255,255))],[root.get_width()//2-p.font.SysFont('dejavusans',75).size("Создание мира")[0]//2,20,p.font.SysFont('dejavusans',50).render('Создание мира',1,(25,255,255))],[root.get_width()//2-256,root.get_height()-100,p.font.SysFont('dejavusans',75).render('Создать',1,(0,255,0))],[root.get_width()//2-256+p.font.SysFont('dejavusans',50).size('Название:')[0]+20,110,p.font.SysFont('dejavusans',30).render(str(randint(10000,100000)),1,(25,255,255)),'']],'game':[(0,0,p.transform.scale(images['pause'],(128,128))),[0,root.get_height()-256,images['arrowleft']],[128*2,root.get_height()-256,images['arrowright']],[128,root.get_height()-128,images['arrowdown']],[128,root.get_height()-128*3,images['arrowup']]]}
+	locs={'main':[[i*128,j*128,images['grass']] for i in range(0,root.get_width()//128+1) for j in range(0,root.get_height()//128+1)]+[[root.get_width()//2-(shrift(100).size('Tea Survival')[0])//2,root.get_height()//5,shrift( 100).render('Tea Survival',(20,255,255))],[root.get_width()//2+(shrift( 100).size('Tea Survival')[0])//2,root.get_height()//5,p.transform.scale(images['stone-axe'],(128,128))],[root.get_width()//2-(shrift( 100).size('Tea Survival')[0])//2-128,root.get_height()//5,p.transform.scale(p.transform.flip(images['stone-pick'],1,0),(128,128))],[root.get_width()//2-shrift(75).size('Сервера')[0]//2,root.get_height()//5+100,shrift(75).render('Сервера',(25,255,255))],[root.get_width()//2-shrift(75).size('Локал')[0]//2,root.get_height()//5+200,shrift(75).render('Локал',(25,255,255))],[0,root.get_height()-70,shrift( 70).render('Выход',(20,255,255))],[500,100,images['white0']]],
+	'main-exit':[[i*128,j*128,images['grass']] for i in range(0,root.get_width()//128+1) for j in range(0,root.get_height()//128+1)]+[[root.get_width()//2-(shrift( 100).size('Tea Survival')[0])//2,root.get_height()//5,shrift( 100).render('Tea Survival',(20,255,255))],[root.get_width()//2+(shrift( 100).size('Tea Survival')[0])//2,root.get_height()//5,p.transform.scale(images['stone-axe'],(128,128))],[root.get_width()//2-(shrift( 100).size('Tea Survival')[0])//2-128,root.get_height()//5,p.transform.scale(p.transform.flip(images['stone-pick'],1,0),(128,128))],[root.get_width()//2-shrift(75).size('Сервера')[0]//2,root.get_height()//5+100,shrift(75).render('Сервера',(25,255,255))],[root.get_width()//2-shrift(75).size('Локал')[0]//2,root.get_height()//5+200,shrift(75).render('Локал',(25,255,255))],[0,root.get_height()-70,shrift( 70).render('Выход',(20,255,255))],	[root.get_width()//2-250,0,p.transform.scale(images['black-screen'],(500,root.get_height()))],[root.get_width()//2-200,100,shrift(50).render('Вы точно хотите выйти?',(20,255,255))],[root.get_width()//2-200,root.get_height()//2,shrift(50).render('Да',(255,0,0))],[root.get_width()//2+50,root.get_height()//2,shrift(50).render('Нет',(0,255,0))]],
+	'main-player':[[i*128,j*128,images['grass']] for i in range(0,root.get_width()//128+1) for j in range(0,root.get_height()//128+1)]+[[root.get_width()//2-(shrift( 100).size('Tea Survival')[0])//2,root.get_height()//5,shrift( 100).render('Tea Survival',(20,255,255))],[root.get_width()//2+(shrift( 100).size('Tea Survival')[0])//2,root.get_height()//5,p.transform.scale(images['stone-axe'],(128,128))],[root.get_width()//2-(shrift( 100).size('Tea Survival')[0])//2-128,root.get_height()//5,p.transform.scale(p.transform.flip(images['stone-pick'],1,0),(128,128))],[root.get_width()//2-shrift(75).size('Сервера')[0]//2,root.get_height()//5+100,shrift(75).render('Сервера',(25,255,255))],[root.get_width()//2-shrift(75).size('Локал')[0]//2,root.get_height()//5+200,shrift(75).render('Локал',(25,255,255))],[0,root.get_height()-70,shrift( 70).render('Выход',(20,255,255))],[root.get_width()//2-250,0,p.transform.scale(images["black-screen"],(500,root.get_height()))],[root.get_width()//2-shrift(50).size('Чайные миры')[0]//2,50,shrift(50).render('Чайные миры',(25,255,255))],[root.get_width()//2-250,75,shrift(25).render('Закрыть',(0,255,0))],[root.get_width()//2-shrift(50).size('Создать новый мир')[0]//2,root.get_height()-100,shrift(50).render('Создать новый мир',(25,255,255))]]+[[root.get_width()//2-256,(i+1)*128,shrift(128).render(worlds[i].name,(25,255,255))] for i in range(len(worlds))],
+	"main-create-world":[[i*128,j*128,images['grass']] for i in range(0,root.get_width()//128+1) for j in range(0,root.get_height()//128+1)]+[[root.get_width()//2-(shrift( 100).size('Tea Survival')[0])//2,root.get_height()//5,shrift( 100).render('Tea Survival',(20,255,255))],[root.get_width()//2+(shrift( 100).size('Tea Survival')[0])//2,root.get_height()//5,p.transform.scale(images['stone-axe'],(128,128))],[root.get_width()//2-(shrift( 100).size('Tea Survival')[0])//2-128,root.get_height()//5,p.transform.scale(p.transform.flip(images['stone-pick'],1,0),(128,128))],[root.get_width()//2-shrift(75).size('Сервера')[0]//2,root.get_height()//5+100,shrift(75).render('Сервера',(25,255,255))],[root.get_width()//2-shrift(75).size('Локал')[0]//2,root.get_height()//5+200,shrift(75).render('Локал',(25,255,255))],[0,root.get_height()-70,shrift( 70).render('Выход',(20,255,255))],[root.get_width()//2-256,0,p.transform.scale(images["black-screen"],(512,root.get_height()))],[root.get_width()//2-256,100,shrift(50).render('Название:',(25,255,255))],[root.get_width()//2-shrift(75).size("Создание мира")[0]//2,20,shrift(50).render('Создание мира',(25,255,255))],[root.get_width()//2-256,root.get_height()-100,shrift(75).render('Создать',(0,255,0))],[root.get_width()//2-256+shrift(50).size('Название:')[0]+20,110,shrift(30).render(str(randint(10000,100000)),(25,255,255)),'']],'game':[(0,0,p.transform.scale(images['pause'],(128,128)))]}
 
-	buttons=[Button([0,root.get_height()-70],[p.font.SysFont("DejaVuSans", 70).size('Выход')[0],root.get_height()],'main','pl.locate="main-exit"'),Button((root.get_width()//2-200,root.get_height()//2),(root.get_width()//2-100,root.get_height()+50),'main-exit','quit()'),Button((root.get_width()//2+50,root.get_height()//2),(root.get_width()//2+200,root.get_height()//2+50),'main-exit','pl.locate="main"'),Button((root.get_width()//2-p.font.SysFont('dejavusans',75).size('Локал')[0]//2,root.get_height()//5+200),(root.get_width()//2+p.font.SysFont('dejavusans',75).size('Локал')[0]//2,root.get_height()//5+275),'main','pl.locate="main-player"'),Button([root.get_width()//2-250,50],[root.get_width()//2-250+p.font.SysFont('dejavusans',50).size("Закрыть")[0],100],'main-player','pl.locate="main"'),Button([root.get_width()//2-p.font.SysFont('dejavusans',50).size("Создать новый мир")[0]//2,root.get_height()-120],[root.get_width()//2+p.font.SysFont('dejavusans',50).size("Создать новый мир")[0]//2,root.get_height()-70],'main-player','pl.locate="main-create-world"'),Button([root.get_width()//2-256+p.font.SysFont('dejavusans',50).size('Название:')[0]+10,100],[root.get_width()//2-256+p.font.SysFont('dejavusans',50).size('Название:')[0]+200,150],'main-create-world','p.key.start_text_input();inp[0]=1'),Button([root.get_width()//2-256,root.get_height()-100],[root.get_width()//2-256+p.font.SysFont('dejavusans',75).size('Создать')[0],root.get_height()],'main-create-world','worlds.append(World(inp[1],map=gen_world.new_world(inp,il=[256]),players={pl.name:Player(50,50,0,2,128*128,128*128,name=pl.name)}));pl.locate="main-player";main2();inp[1]=""'),Button([0,0],[128,128],'game','0'),Button([0,root.get_height()-256],[128,root.get_height()-128],'game','pl.world.players[pl.name].x-=16'),Button([128*2,root.get_height()-256],[128*3,root.get_height()-128],'game','pl.world.players[pl.name].x+=16'),Button([128,root.get_height()-128],[256,root.get_height()],'game','pl.world.players[pl.name].y+=16'),Button([128,root.get_height()-128*3],[256,root.get_height()-256],'game','pl.world.players[pl.name].y-=16')]+[Button([root.get_width()//2-256,(i+1)*128],[root.get_width()//2+256,(i+2)*128],'main-player',f'''
+	buttons=[Button([0,root.get_height()-70],[shrift( 70).size('Выход')[0],root.get_height()],'main','pl.locate="main-exit"'),Button((root.get_width()//2-200,root.get_height()//2),(root.get_width()//2-100,root.get_height()+50),'main-exit','quit()'),Button((root.get_width()//2+50,root.get_height()//2),(root.get_width()//2+200,root.get_height()//2+50),'main-exit','pl.locate="main"'),Button((root.get_width()//2-shrift(75).size('Локал')[0]//2,root.get_height()//5+200),(root.get_width()//2+shrift(75).size('Локал')[0]//2,root.get_height()//5+275),'main','pl.locate="main-player"'),Button([root.get_width()//2-250,50],[root.get_width()//2-250+shrift(50).size("Закрыть")[0],100],'main-player','pl.locate="main"'),Button([root.get_width()//2-shrift(50).size("Создать новый мир")[0]//2,root.get_height()-120],[root.get_width()//2+shrift(50).size("Создать новый мир")[0]//2,root.get_height()-70],'main-player','pl.locate="main-create-world"'),Button([root.get_width()//2-256+shrift(50).size('Название:')[0]+10,100],[root.get_width()//2-256+shrift(50).size('Название:')[0]+200,150],'main-create-world','p.key.start_text_input();inp[0]=1'),Button([root.get_width()//2-256,root.get_height()-100],[root.get_width()//2-256+shrift(75).size('Создать')[0],root.get_height()],'main-create-world','worlds.append(World(inp[1],map=gen_world.new_world(inp,il=[256]),players={pl.name:Player(50,50,0,2,128*128,128*128,name=pl.name)}));pl.locate="main-player";main2();inp[1]=""'),Button([0,0],[128,128],'game','0')]+[Button([root.get_width()//2-256,(i+1)*128],[root.get_width()//2+256,(i+2)*128],'main-player',f'''
 pl.world=worlds[{i}]
 pl.locate="game"''') for i in range(len(worlds))]
 
@@ -112,9 +190,9 @@ pl.locate="game"''') for i in range(len(worlds))]
 			if pl.locate.startswith('main'):
 				if plus[0]<0:
 					plus
-					locs[locate][-1][2]=images[f'white{count}.png']	
+					locs[locate][-1][2]=images[f'white{count}']	
 				else:
-					locs[locate][-1][2]=p.transform.flip(images[f'white{count}.png'],1,0)
+					locs[locate][-1][2]=p.transform.flip(images[f'white{count}'],1,0)
 				if locs[locate][-1][1]+plus[1]>root.get_height():
 					plus=[-randint(10,15),randint(10,15)]
 					plus[1]=-plus[1]
@@ -137,20 +215,20 @@ pl.locate="game"''') for i in range(len(worlds))]
 			for ev in p.event.get():
 					#print(ev)
 				
-					if ev.type==locals.QUIT:
+					if ev.type==QUIT:
 						p.quit()
 						quit()
-					if ev.type==locals.KEYUP and inp[0]:
+					if ev.type==KEYUP and inp[0]:
 						if ev.key==8:
-							locs['main-create-world'][-1][2]=p.font.SysFont('dejavusans',30).render(locs['main-create-world'][-1][3][:-1],1,(25,255,255))
+							locs['main-create-world'][-1][2]=shrift(30).render(locs['main-create-world'][-1][3][:-1],(25,255,255))
 							locs['main-create-world'][-1][3]=locs['main-create-world'][-1][3][:-1]
 							inp[1]=locs['main-create-world'][-1][3][:-1]
-					if ev.type==locals.TEXTINPUT and inp[0]:
+					if ev.type==TEXTINPUT and inp[0]:
 						locs['main-create-world'][-1][3]+=ev.text
 						if not game:
-							locs['main-create-world'][-1][2]=p.font.SysFont('dejavusans',30).render(locs["main-create-world"][-1][3],1,(25,255,255))
+							locs['main-create-world'][-1][2]=shrift(30).render(locs["main-create-world"][-1][3],(25,255,255))
 							inp[1]=locs["main-create-world"][-1][3]
-					if ev.type==locals.MOUSEBUTTONDOWN:
+					if ev.type==MOUSEBUTTONDOWN:
 						for button in [i for i in buttons if i.loc==pl.locate]:
 							if button.collide(ev.pos):
 								button.result()
@@ -159,29 +237,27 @@ pl.locate="game"''') for i in range(len(worlds))]
 			for button in [i for i in buttons if i.loc==pl.locate]:
 				if button.collide(p.mouse.get_pos()):
 					button.result()
-		#	try:
-		#	if 1:
-		#		pl.world.players[pl.name].x+=10
-			
-			
-		#	try:
+
+			[root.blit(images[pl.world.map[i][j].name],(i*128-(player(pl.name).x), j*128-player(pl.name).y))
+    for i in range(player(pl.name).x//128-root.get_width()//128-2,player(pl.name).x//128+root.get_width()//128+2) 
+    for j in range(len(pl.world.map[i]))]
+#
+			[root.blit(player(pl.name).anim,(root.get_width()//2-32,root.get_height()//2)) for i in pl.world.players ]
+			[root.blit(shrift(25).render(pl.world.players[i].name,(25,255,255)),(root.get_width()//2,root.get_height()//2-30)) for i in pl.world.players]
+			[root.blit(images[pl.world.builds[i][2].name],(pl.world.builds[i][0]+pl.world.builds[i][2].place['x']-player(pl.name).x,pl.world.builds[i][1]+-player(pl.name).y)) for i in range(len(pl.world.builds))]
+			j.draw(root)
+			for i in pygame.event.get():
+				j.on_touch(i)
+			player(pl.name).x-=round(-(j.stick_x-j.x)/j.r*20)
+			player(pl.name).y-=round(-(j.stick_y-j.y)/j.r*20)
+			if round((j.stick_x-j.x)/j.r)!=0 or round(-(j.stick_y-j.y)/j.r)!=0:
 				
-			[root.blit(images[pl.world.map[i][j].name],(i*128-(pl.world.players[pl.name].x), j*128-pl.world.players[pl.name].y))
-			 for i in range(pl.world.players[pl.name].x//128-root.get_width()//128-2,pl.world.players[pl.name].x//128+root.get_width()//128+2) 
-			 for j in range(len(pl.world.map[0]))]
-		#	except:
-		#		print([(i*128-pl.world.players[pl.name].x, j*128-pl.world.players[pl.name].y) for i in range(pl.world.players[pl.name].x//128-root.get_width()//2,pl.world.players[pl.name].x//128+root.get_width()//2) for j in range(pl.world.players[pl.name].y//128-root.get_height()//2,pl.world.players[pl.name].y//128+root.get_height()//2)])
-		#		sys.exit()
-		#		quit()
-		#		p.quit()
-			[root.blit(images[pl.world.builds[i][2].name],(pl.world.builds[i][0]+pl.world.builds[i][2].place['x']-pl.world.players[pl.name].x,pl.world.builds[i][1]+-pl.world.players[pl.name].y)) for i in range(len(pl.world.builds))]
-			[root.blit(pl.world.players[pl.name].anim,(root.get_width()//2-32,root.get_height()//2)) for i in pl.world.players ]
-			[root.blit(p.font.SysFont('dejavusans',25).render(pl.world.players[i].name,1,(25,255,255)),(root.get_width()//2,root.get_height()//2-30)) for i in pl.world.players]
-		
-		#	except:
-		#		print([i for i in pl.world.players if i.name==pl.name],pl.name,[i.name for i in pl.world.players])
-		#		quit()
-		#	p.display.flip()
+				player(pl.name).counter+=1
+				if (j.stick_x-j.x)/j.r>0:
+					player(pl.name).anim=p.transform.flip(images["white"+str(player(pl.name).counter%2)],1,0)
+				else:
+					player(pl.name).anim=images["white"+str(player(pl.name).counter%2)]
+			#print(round((j.stick_y-j.y)/j.r*20))
 		[root.blit(locs[pl.locate][i][2],locs[pl.locate][i][:2]) for i in range(0,len(locs[pl.locate]))]
 		
 		p.display.flip()
