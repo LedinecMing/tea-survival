@@ -1,3 +1,2 @@
-python-for-android
 pillow
 pygame
